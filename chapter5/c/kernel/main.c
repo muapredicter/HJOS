@@ -1,5 +1,4 @@
-int main()
-{
-    while (1)
-        return 0;
+int main(void){
+    while(1);
+    return 0;
 }
