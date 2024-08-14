@@ -24,24 +24,26 @@ struct pool kernel_pool, user_pool; // 为kernel与user分别建立物理内存�
 struct virtual_addr kernel_vaddr; // 用于管理内核虚拟地址空间
 
 // 初始化内核物理内存池与用户物理内存池
-static void mem_pool_init(uint32_t all_mem)
+static void mem_pool_init(uint32_t all_mem)         // all_mem 为32 MB
 {
     put_str("   mem_pool_init start\n");
     uint32_t page_table_size = PG_SIZE * 256;       // 页表大小= 1页的页目录表+第0和第768个页目录项指向同一个页表+
                                                     // 第769~1022个页目录项共指向254个页表,共256个页表
-    uint32_t used_mem = page_table_size + 0x100000; // 已使用内存 = 1MB + 256个页表
-    uint32_t free_mem = all_mem - used_mem;
+    												// 4KB * 256 = 1MB
+    uint32_t used_mem = page_table_size + 0x100000; // 已使用内存 = 1MB + 256个页表 = 2MB
+    uint32_t free_mem = all_mem - used_mem;			// 32MB - 2MB = 30MB
     uint16_t all_free_pages = free_mem / PG_SIZE;                  // 将所有可用内存转换为页的数量，内存分配以页为单位，丢掉的内存不考虑
-    uint16_t kernel_free_pages = all_free_pages / 2;               // 可用内存是用户与内核各一半，所以分到的页自然也是一半
+    															   // 所有的空页有 30 * 256 页
+    uint16_t kernel_free_pages = all_free_pages / 2;               // 可用内存是用户与内核各一半，所以分到的页自然也是一半，即15 *256 页
     uint16_t user_free_pages = all_free_pages - kernel_free_pages; // 用于存储用户空间分到的页
 
     /* 为简化位图操作，余数不处理，坏处是这样做会丢内存。
     好处是不用做内存的越界检查,因为位图表示的内存少于实际物理内存*/
-    uint32_t kbm_length = kernel_free_pages / 8; // 内核物理内存池的位图长度,位图中的一位表示一页,以字节为单位
+    uint32_t kbm_length = kernel_free_pages / 8; // 内核物理内存池的位图长度,位图中的一位表示一页,以字节为单位 480B
     uint32_t ubm_length = user_free_pages / 8;   // 用户物理内存池的位图长度.
 
-    uint32_t kp_start = used_mem;                               // Kernel Pool start,内核使用的物理内存池的起始地址
-    uint32_t up_start = kp_start + kernel_free_pages * PG_SIZE; // User Pool start,用户使用的物理内存池的起始地址
+    uint32_t kp_start = used_mem;                               // Kernel Pool start,内核使用的物理内存池的起始地址 2MB
+    uint32_t up_start = kp_start + kernel_free_pages * PG_SIZE; // User Pool start,用户使用的物理内存池的起始地址 2MB+15MB
 
     kernel_pool.phy_addr_start = kp_start; // 赋值给内核使用的物理内存池的起始地址
     user_pool.phy_addr_start = up_start;   // 赋值给用户使用的物理内存池的起始地址
@@ -64,9 +66,11 @@ static void mem_pool_init(uint32_t all_mem)
 
     /* 用户内存池的位图紧跟在内核内存池位图之后 */
     user_pool.pool_bitmap.bits = (void *)(MEM_BITMAP_BASE + kbm_length); // 管理用户使用的物理内存池的位图起始地址
-    /******************** 输出内存池信息 **********************/
+    /******************** 输出物理内存池信息 **********************/
+    put_str("      phy_pool:");
+    put_str("\n");
     put_str("      kernel_pool_bitmap_start:");
-    put_int((int)kernel_pool.pool_bitmap.bits);
+    put_int((int)kernel_pool.pool_bitmap.bits);  
     put_str(" kernel_pool_phy_addr_start:");
     put_int(kernel_pool.phy_addr_start);
     put_str("\n");
@@ -90,6 +94,15 @@ static void mem_pool_init(uint32_t all_mem)
 
     kernel_vaddr.vaddr_start = K_HEAP_START; // 赋值给内核可以动态使用的虚拟地址空间的起始地址
     bitmap_init(&kernel_vaddr.vaddr_bitmap); // 初始化管理内核可以动态使用的虚拟地址池的位图
+     /******************** 输出内核虚拟内存池信息 **********************/
+    put_str("   virtual_pool:");
+    put_str("\n");
+    put_str("      kernel_pool_virtual_bitmap_start:");
+    put_int((int)kernel_vaddr.vaddr_bitmap.bits);  
+    put_str("\n");
+    put_str("      kernel_pool_virtual_addr_start:");
+    put_int(kernel_vaddr.vaddr_start);
+    put_str("\n");
     put_str("   mem_pool_init done\n");
 }
 
@@ -97,7 +110,7 @@ static void mem_pool_init(uint32_t all_mem)
 void mem_init()
 {
     put_str("mem_init start\n");
-    uint32_t mem_bytes_total = (*(uint32_t *)(0xb00));
+    uint32_t mem_bytes_total = (*(uint32_t *)(0xb00)); // 32MB
     mem_pool_init(mem_bytes_total); // 初始化内存池
     put_str("mem_init done\n");
 }
